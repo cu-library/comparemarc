@@ -8,6 +8,7 @@ import time
 import mmap
 import random
 import string
+import config
 
 @click.group()
 def cli():
@@ -23,7 +24,7 @@ def load(inputmarc, records, delete):
 
     if delete:
         click.echo("Deleting 'marcdata' table...", nl=False)
-        conn = psycopg2.connect("dbname=certifymarc user=certifymarc password=certifymarc host=localhost")
+        conn = psycopg2.connect(f"dbname={config.database} user={config.username} password={config.password}")
         cur = conn.cursor()
         cur.execute("TRUNCATE marcdata")
         conn.commit()
@@ -74,7 +75,7 @@ def load(inputmarc, records, delete):
 
 def loader(inputqueue, id):
     num = 0
-    conn = psycopg2.connect("dbname=certifymarc user=certifymarc password=certifymarc host=localhost")
+    conn = psycopg2.connect(f"dbname={config.database} user={config.username} password={config.password}")
     cur = conn.cursor()
     for record in iter(inputqueue.get, None):
         bibid = record.get_fields('001')[0].value()
@@ -99,7 +100,7 @@ def loader(inputqueue, id):
 def gremlin(delete, change, add):
     """Unleash a gremlin into the database to make changes."""
 
-    conn = psycopg2.connect("dbname=certifymarc user=certifymarc password=certifymarc host=localhost")
+    conn = psycopg2.connect(f"dbname={config.database} user={config.username} password={config.password}")
     cur = conn.cursor()
 
     click.echo("Deleting rows from the 'marcdata' table...", nl=False)
