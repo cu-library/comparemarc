@@ -3,3 +3,4 @@ venv
 *.marc
 config.py
 __pycache__
+comparemarc.egg-info

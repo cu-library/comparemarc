@@ -1,4 +1,4 @@
- CREATE TABLE marcdata (
+CREATE TABLE marcdata (
 bibid text NOT NULL,
 tag TEXT NOT NULL,
 indicator1 TEXT NOT NULL,

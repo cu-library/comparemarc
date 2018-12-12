@@ -56,3 +56,14 @@ Options:
 
 ## Example usage
 
+To speed up execution on large MARC files, comparemarc uses a PostgreSQL database to store the 'before' data. You'll need to create database user, database, and table. Example create table /create index statements are in `create_table.sql`.
+
+```bash
+$ git clone https://github.com/cu-library/comparemarc.git
+$ cd comparemarc/
+$ python36 -m venv venv
+$ source venv/bin/activate
+$ pip install --editable .
+$ cp config.py-example config.py
+$ nano config.py # Edit the config file with your DB table, username, password.
+```
