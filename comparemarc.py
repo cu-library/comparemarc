@@ -148,10 +148,11 @@ def gremlin(delete, change, add):
 @click.option('--records', default=0, help="Number of records in the input, use to skip counting records.")
 @click.option('--bibidselector', default='001', help="Where is the unique bibid stored. ex: 001 or 907a")
 @click.option('--trimbibid/--no-trimbibid', default=True, help="Delete the last character in the bibid.")
+@click.option('--unchanged/--no-unchanged', default=True, help="Include unchanged records in the report.")
 @click.option('--ignore', multiple=True, help="Changes in these tags will be ignored.")
 @click.argument('inputfile', type=click.Path(exists=True, dir_okay=False, resolve_path=True, readable=True))
 @click.argument('outputfile', type=click.Path(resolve_path=True))
-def check(records, bibidselector, trimbibid, ignore, inputfile, outputfile):
+def check(records, bibidselector, trimbibid, unchanged, ignore, inputfile, outputfile):
     """Check a MARC file against the database to ensure no unexpected changes occurred."""
 
     numrecords = 0
@@ -168,7 +169,7 @@ def check(records, bibidselector, trimbibid, ignore, inputfile, outputfile):
         processes.append(p)
         p.start()
 
-    printer = multiprocessing.Process(target=writefromqueue, args=(printq,outputfile,ignore))
+    printer = multiprocessing.Process(target=writefromqueue, args=(printq, outputfile, unchanged, ignore))
     printer.start()
 
     numprocessed = 0
@@ -222,12 +223,11 @@ def compare(inputqueue, bibidselector, printq, trimbibid, ignore):
         for row in fileminusdb:
             fileonly.add(f"{row[1]},{row[2]},{row[3]},{row[4]}")
 
-        if len(dbminusfile) > 0 or len(fileminusdb) > 0:
-            printq.put((bibid, dbminusfile, fileminusdb, dbonly, fileonly))
+        printq.put((bibid, dbminusfile, fileminusdb, dbonly, fileonly))
 
     conn.close()
 
-def writefromqueue(queue, outputfile, ignore):
+def writefromqueue(printq, outputfile, unchanged, ignore):
 
     dbonly = set()
     fileonly = set()
@@ -236,29 +236,37 @@ def writefromqueue(queue, outputfile, ignore):
     with open(outputfile, 'w', encoding='utf-8') as f:
 
         if len(ignore) > 0:
-             f.write(f"Ignoring fields {', '.join(sorted(ignore))}.\n\n")
+             f.write(f"Ignoring fields {', '.join(sorted(ignore))}.\n\n\n")
 
-        for bibidvalue, dbminusfile, fileminusdb, newdbonly, newfileonly in iter(queue.get, None):
-            f.write(f"{bibidvalue}\n\n")
-
+        for bibidvalue, dbminusfile, fileminusdb, newdbonly, newfileonly in iter(printq.get, None):
             dbonly.update(newdbonly)
             fileonly.update(newfileonly)
-            changed+=1
 
-            if len(dbminusfile) != 0:
-                sorteddbminusfile = sorted(list(dbminusfile), key=itemgetter(1,2,3,4,5))
-                sorteddbminusfile = [(x[0], x[1], x[2], x[3], x[4], f"`{x[5]}`") for x in sorteddbminusfile]
+            dbminusfilelen = len(dbminusfile)
+            fileminusdblen = len(fileminusdb)
 
-                f.write("In database not in file:\n")
-                f.write(tabulate(sorteddbminusfile, headers=["bibid", "tag", "i1", "i2", "subf", "`value`"]))
-                f.write("\n\n")
+            if dbminusfilelen > 0 or fileminusdblen > 0:
+                changed+=1
+                f.write(f"Changes in {bibidvalue}:\n\n")
 
-            if len(fileminusdb) != 0:
-                sortedfileminusdb = sorted(list(fileminusdb), key=itemgetter(1,2,3,4,5))
-                sortedfileminusdb = [(x[0], x[1], x[2], x[3], x[4], f"`{x[5]}`") for x in sortedfileminusdb]
-                f.write("In file not in database:\n")
-                f.write(tabulate(sortedfileminusdb, headers=["bibid", "tag", "i1", "i2", "subf", "`value`"]))
-                f.write("\n\n")
+                if dbminusfilelen != 0:
+                    sorteddbminusfile = sorted(list(dbminusfile), key=itemgetter(1,2,3,4,5))
+                    sorteddbminusfile = [(x[0], x[1], x[2], x[3], x[4], f"`{x[5]}`") for x in sorteddbminusfile]
+                    f.write("In database not in file:\n")
+                    f.write(tabulate(sorteddbminusfile, headers=["bibid", "tag", "i1", "i2", "subf", "`value`"]))
+                    f.write("\n\n")
+
+                if fileminusdblen != 0:
+                    sortedfileminusdb = sorted(list(fileminusdb), key=itemgetter(1,2,3,4,5))
+                    sortedfileminusdb = [(x[0], x[1], x[2], x[3], x[4], f"`{x[5]}`") for x in sortedfileminusdb]
+                    f.write("In file not in database:\n")
+                    f.write(tabulate(sortedfileminusdb, headers=["bibid", "tag", "i1", "i2", "subf", "`value`"]))
+                    f.write("\n\n")
+
+                f.write("\n")
+
+            elif unchanged:
+                f.write(f"No changes in {bibidvalue}.\n\n\n")
 
         sorteddbonly = sorted(list(dbonly))
         sortedfileonly = sorted(list(fileonly))
