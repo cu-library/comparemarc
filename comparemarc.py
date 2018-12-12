@@ -15,6 +15,7 @@ import random
 import string
 import config
 import sys
+import io
 from operator import itemgetter
 from tabulate import tabulate
 
@@ -84,7 +85,6 @@ def load(records, delete, bibidselector, trimbibid, inputfile):
     click.echo("Done, processed {} records.".format(numprocessed))
 
 def loader(inputqueue, bibidselector, trimbibid):
-    num = 0
     conn = psycopg2.connect(f"dbname={config.database} user={config.username} password={config.password}")
     cur = conn.cursor()
     insert = sql.SQL("INSERT INTO {} (bibid, tag, indicator1, indicator2, subfield, value) VALUES %s").format(sql.Identifier(config.table))
@@ -95,8 +95,7 @@ def loader(inputqueue, bibidselector, trimbibid):
             subfields = getattr(field, 'subfields', [" ", field.value()])
             for subfield, value in zip(subfields[0::2], subfields[1::2]):
                 valuestoinsert.append((bibid, field.tag, getattr(field, 'indicator1', ""), getattr(field, 'indicator2', ""), subfield, value))
-        num+=1
-        if num % 1000 == 0:
+        if len(valuestoinsert) == 1000:
             psycopg2.extras.execute_values(cur, insert, valuestoinsert)
             valuestoinsert = []
             conn.commit()
