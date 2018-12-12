@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 """
-big-marc-diff - Load a MARC file into a PostgreSQL database, then compare it to another MARC file.
+comparemarc - Load a MARC file into a PostgreSQL database, then compare it to another MARC file.
 """
 
 import click
@@ -152,7 +152,7 @@ def gremlin(delete, change, add):
 @click.argument('inputfile', type=click.Path(exists=True, dir_okay=False, resolve_path=True, readable=True))
 @click.argument('outputfile', type=click.Path(resolve_path=True))
 def check(records, bibidselector, trimbibid, ignore, inputfile, outputfile):
-    """Check a marc file against a database to ensure no unexpected changes occurred."""
+    """Check a MARC file against the database to ensure no unexpected changes occurred."""
 
     numrecords = 0
     if records == 0:
