@@ -147,11 +147,12 @@ def gremlin(delete, change, add):
 @click.option('--records', default=0, help="Number of records in the input, use to skip counting records.")
 @click.option('--bibidselector', default='001', help="Where is the unique bibid stored. ex: 001 or 907a")
 @click.option('--trimbibid/--no-trimbibid', default=True, help="Delete the last character in the bibid.")
-@click.option('--unchanged/--no-unchanged', default=True, help="Include unchanged records in the report.")
+@click.option('--strip/--no-strip', default=True, help="Remove whitespace around values before comparing.")
+@click.option('--unchanged/--no-unchanged', default=False, help="Include unchanged records in the report.")
 @click.option('--ignore', multiple=True, help="Changes in these tags will be ignored.")
 @click.argument('inputfile', type=click.Path(exists=True, dir_okay=False, resolve_path=True, readable=True))
 @click.argument('outputfile', type=click.Path(resolve_path=True))
-def check(records, bibidselector, trimbibid, unchanged, ignore, inputfile, outputfile):
+def check(records, bibidselector, trimbibid, strip, unchanged, ignore, inputfile, outputfile):
     """Check a MARC file against the database to ensure no unexpected changes occurred."""
 
     numrecords = 0
@@ -164,11 +165,11 @@ def check(records, bibidselector, trimbibid, unchanged, ignore, inputfile, outpu
     printq = multiprocessing.Queue()
     processes = []
     for i in range(multiprocessing.cpu_count()):
-        p = multiprocessing.Process(target=compare, args=(q, bibidselector, printq, trimbibid, ignore))
+        p = multiprocessing.Process(target=compare, args=(q, bibidselector, printq, trimbibid, strip, ignore))
         processes.append(p)
         p.start()
 
-    printer = multiprocessing.Process(target=writefromqueue, args=(printq, outputfile, unchanged, ignore))
+    printer = multiprocessing.Process(target=writefromqueue, args=(printq, outputfile, unchanged, strip, ignore))
     printer.start()
 
     numprocessed = 0
@@ -193,7 +194,7 @@ def check(records, bibidselector, trimbibid, unchanged, ignore, inputfile, outpu
 
     click.echo("Done, processed {} records.".format(numprocessed))
 
-def compare(inputqueue, bibidselector, printq, trimbibid, ignore):
+def compare(inputqueue, bibidselector, printq, trimbibid, strip, ignore):
     num = 0
     conn = psycopg2.connect(f"dbname={config.database} user={config.username} password={config.password}")
     for record in iter(inputqueue.get, None):
@@ -204,12 +205,16 @@ def compare(inputqueue, bibidselector, printq, trimbibid, ignore):
         readcur.execute(sql.SQL("SELECT bibid, tag, indicator1, indicator2, subfield, value FROM {} WHERE bibid = %s").format(sql.Identifier(config.table)), (bibid,))
         for row in readcur:
             if row[1] not in ignore:
+                if strip:
+                    row = row[:5] + (row[5].strip(),)
                 setofrowsdb.add(row)
 
         for field in record.get_fields():
             subfields = getattr(field, 'subfields', [" ", field.value()])
             for subfield, value in zip(subfields[0::2], subfields[1::2]):
                 if field.tag not in ignore:
+                    if strip:
+                        value = value.strip()
                     setofrowsfile.add((bibid, field.tag, getattr(field, 'indicator1', ""), getattr(field, 'indicator2', ""), subfield, value))
 
         dbonly = set()
@@ -226,7 +231,7 @@ def compare(inputqueue, bibidselector, printq, trimbibid, ignore):
 
     conn.close()
 
-def writefromqueue(printq, outputfile, unchanged, ignore):
+def writefromqueue(printq, outputfile, unchanged, strip, ignore):
 
     dbonly = set()
     fileonly = set()
@@ -236,6 +241,9 @@ def writefromqueue(printq, outputfile, unchanged, ignore):
 
         if len(ignore) > 0:
              f.write(f"Ignoring fields {', '.join(sorted(ignore))}.\n\n\n")
+
+        if strip:
+             f.write("Whitespace before and after values removed before comparison.\n\n\n")
 
         for bibidvalue, dbminusfile, fileminusdb, newdbonly, newfileonly in iter(printq.get, None):
             dbonly.update(newdbonly)
