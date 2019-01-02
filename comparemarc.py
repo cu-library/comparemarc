@@ -61,7 +61,7 @@ def load(records, delete, bibidselector, trimbibid, inputfile):
     # Run through the input file and add each record to the queue.
     numprocessed = 0
     with open(inputfile, 'rb') as f:
-        reader = pymarc.MARCReader(f, to_unicode=True, force_utf8=True)
+        reader = pymarc.MARCReader(f, to_unicode=True, force_utf8=True, utf8_handling='ignore')
         with click.progressbar(reader,
                        label='Processing MARC records',
                        length=numrecords) as reader:
@@ -95,7 +95,7 @@ def loader(inputqueue, bibidselector, trimbibid):
             subfields = getattr(field, 'subfields', [" ", field.value()])
             for subfield, value in zip(subfields[0::2], subfields[1::2]):
                 valuestoinsert.append((bibid, field.tag, getattr(field, 'indicator1', ""), getattr(field, 'indicator2', ""), subfield, value))
-        if len(valuestoinsert) == 1000:
+        if len(valuestoinsert) > 1000:
             psycopg2.extras.execute_values(cur, insert, valuestoinsert)
             valuestoinsert = []
             conn.commit()
@@ -174,7 +174,7 @@ def check(records, bibidselector, trimbibid, strip, unchanged, ignore, inputfile
 
     numprocessed = 0
     with open(inputfile, 'rb') as f:
-        reader = pymarc.MARCReader(f, to_unicode=True, force_utf8=True)
+        reader = pymarc.MARCReader(f, to_unicode=True, force_utf8=True, utf8_handling='ignore')
         with click.progressbar(reader,
                        label='Processing MARC records',
                        length=numrecords) as reader:
